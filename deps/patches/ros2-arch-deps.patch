@@ -1,0 +1,21 @@
+diff --git a/PKGBUILD b/PKGBUILD
+index 094d63f..3971f3e 100644
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -5,7 +5,7 @@
+ # Contributor: calvertdw
+ pkgname=ros2-arch-deps
+ pkgver=0.23
+-pkgrel=1
++pkgrel=2
+ pkgdesc="[Meta-PKG] Dependencies for building ROS2 on Arch"
+ url="https://docs.ros.org/"
+ arch=('any')
+@@ -41,7 +41,6 @@ depends=(
+   'python-pyqt5-sip'
+   'python-pytest-repeat'
+   'python-pytest-rerunfailures'
+-  'python-pytest-runner'
+   'python-pyyaml'
+   'python-setuptools'
+   'python-wheel'

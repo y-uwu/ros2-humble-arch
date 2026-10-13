@@ -1,0 +1,43 @@
+diff --git a/PKGBUILD b/PKGBUILD
+index a3c5d4d..7adef6e 100644
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,8 +1,9 @@
+ # Maintainer: Kartik Mohta <kartikmohta@gmail.com>
++# Local patch: replace removed pkg_resources.load_entry_point with importlib.metadata
+ 
+ pkgname=('python-vcstool')
+ pkgver='0.3.0'
+-pkgrel=1
++pkgrel=2
+ pkgdesc='A version control system tool designed to make working with multiple repositories easier'
+ arch=('any')
+ url='https://github.com/dirk-thomas/vcstool'
+@@ -16,6 +17,27 @@ sha256sums=('2b6e4a97454983166e9a5fe08aca41cd8b28288ef693b954bc0e8b8518eafd3b')
+ 
+ _module='vcstool'
+ 
++prepare() {
++    cd "${srcdir}/${_module}-${pkgver}"
++    python - << 'PYEOF'
++p = 'vcstool/commands/help.py'
++s = open(p).read()
++shim = '''from importlib.metadata import entry_points
++
++
++def load_entry_point(dist, group, name):
++    for ep in entry_points(group=group):
++        if ep.name == name:
++            return ep.load()
++    raise ImportError("entry point %r not found in group %r" % (name, group))
++'''
++new = s.replace('from pkg_resources import load_entry_point\n', shim, 1)
++assert new != s, 'patch target line not found'
++open(p, 'w').write(new)
++PYEOF
++    ! grep -rq pkg_resources vcstool/ || { echo "pkg_resources still referenced"; exit 1; }
++}
++
+ build() {
+     cd "${srcdir}/${_module}-${pkgver}"
+     python setup.py build

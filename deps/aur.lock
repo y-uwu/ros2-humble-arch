@@ -1,0 +1,42 @@
+# AUR recipes that ros2-humble-arch needs, in build order, pinned to the commits
+# this release was built with. build.sh clones each one from
+# https://aur.archlinux.org/<name>.git, checks out the commit, and applies
+# patches/<name>.patch when one exists. See PATCHES.md for why each patch exists.
+#
+# To move a recipe to a newer AUR commit: change the hash here, run
+# `./build.sh deps`, and if its patch no longer applies, redo the change by hand
+# in deps/aur/<name> and save it with `git -C deps/aur/<name> diff > deps/patches/<name>.patch`.
+#
+# name                               commit
+python-empy3                         e9fa350cf58eb559460a3b7b95854bc0ab5a8af5
+python-catkin_pkg                    a9e32d01252710d51a8e51063342bffbf14c89f7
+python-rospkg                        2454a6c72108461ccfbfe57a046e5dc176d6ab3c
+python-rosdistro                     34517b730887a54b24cc0d5c0726bd556f99418f
+python-rosdep                        f86942f3038a108234379044497469fa246a89ad
+python-rosinstall_generator          45780700c74e4e0f3881310df41f2789d5bc6e9c
+python-vcstool                       9c5be58350695cb6851fd342c4d3ab46d520bf93
+python-bloom                         f9143eb5e53c735d5edad251181db28b5d939eeb
+python-colcon-core                   aac516751df3b91bc895d9d122620943c43212a0
+python-colcon-cd                     389111e34dc3cd8c515c39469f514072c3d9017b
+python-colcon-library-path           5783fa705f1a777153a6f893ae0ce86e3a3a4aff
+python-colcon-cmake                  b15f6d05522e61e1f910e7a1a2ce3d2158f41fc3
+python-colcon-pkg-config             5693500be5c0fa01897c24fb8bc95c8881ca620b
+python-colcon-recursive-crawl        0bdefe64f9b757d7330ad8b13752c4ce6c745e88
+python-colcon-python-setup-py        abb055600c4c32bb1cb6a8286686a222db842b27
+python-colcon-ros                    1eca85b58e44b578d273cf3ed832dd71324e3400
+python-colcon-metadata               4a317a35c6d0dfa1ad921eb235f9ccd76c540fd6
+python-colcon-argcomplete            19e213ad79ff3fe5eac4b1176bf6862e5ff72b35
+python-colcon-notification           7d708db1d29aee826b0024bbd1b0238b99e09bc1
+python-colcon-powershell             a808c666fe8eb60164fb5b79bfab63e684bbfd41
+python-colcon-test-result            1f8993cddbafd5b9799c08e21f8c69a5c338325a
+python-colcon-package-information    0e7fec64ab0b98a996930ae4eb5a19851e6f3b9e
+python-colcon-parallel-executor      4c6f9fe5373c72b3f83dde5af67037ea0d44f045
+python-colcon-bash                   fcac6d0d9382aaaf55abad2e1b2aa8181f020f58
+python-colcon-defaults               305164edd88f4406eaf7ba1defb349dfacd85a70
+python-colcon-devtools               d01e1fc5e72228a2736df5f72ff36ad52c5a3dbd
+python-colcon-package-selection      bc8b7098a27ecb7af65fca1cc3833a3fc9812226
+python-colcon-output                 c90df2159724486e09422526c3d9a982e775013e
+python-colcon-zsh                    0c250edd879e734b75f9f7119bb240ea03da6ca3
+python-colcon-common-extensions      543ff23575396aa467918c3b2d1cf44d8bf70f04
+ros2-arch-deps                       22b4b39435f45b06656632a8d282420077bb5f15
+console-bridge                       6919f93532177a19e65c9a260c559d8cffd48779

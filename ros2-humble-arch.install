@@ -1,0 +1,20 @@
+post_install() {
+    cat <<'MSG'
+==> ROS 2 Humble (with MoveIt 2, ros2_control and xacro) is in /opt/ros/humble.
+    Load it in each shell with
+      source /opt/ros/humble/setup.zsh     (zsh)
+      source /opt/ros/humble/setup.bash    (bash)
+    or add that line to ~/.zshrc / ~/.bashrc.
+==> This package ships Eigen 3.4.0 inside /opt/ros/humble. Delete build/ and
+    install/ once in any colcon workspace built before it, because CMake caches
+    where it found Eigen.
+MSG
+}
+
+post_upgrade() {
+    echo "==> Delete build/ and install/ once in your colcon workspaces and rebuild them."
+}
+
+post_remove() {
+    echo "==> You may want to remove the ROS lines from ~/.zshrc or ~/.bashrc."
+}

@@ -1,0 +1,11 @@
+# makepkg puts sources, git mirrors, the build tree and finished packages next
+# to the PKGBUILD; only the recipe files are tracked.
+/src/
+/pkg/
+/ros2/
+/eigen-*.tar.gz
+*.pkg.tar*
+*.log
+
+# AUR recipes cloned by build.sh
+/deps/aur/
