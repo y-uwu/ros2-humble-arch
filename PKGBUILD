@@ -27,7 +27,7 @@
 
 pkgname=ros2-humble-arch
 pkgver=2026.02.20
-pkgrel=1
+pkgrel=2
 _eigen_ver=3.4.0
 pkgdesc="ROS 2 Humble with MoveIt 2, ros2_control and xacro, built against Eigen 3.4.0 to match Ubuntu 22.04"
 url="https://docs.ros.org/en/humble/"
@@ -63,7 +63,7 @@ optdepends=(
 )
 makedepends=('cmake' 'git')
 provides=("ros2-humble=${pkgver}" 'ros2-humble-base')
-conflicts=('ros2-humble' 'ros2-humble-base'
+conflicts=('ros2-humble' 'ros2-humble-base' 'ros2-humble-debug'
            'ros2-humble-core' 'ros2-humble-extras' 'ros2-humble-eigen3')  # earlier versions of this repository
 source=(
     "ros2::git+https://github.com/ros2/ros2#tag=release-humble-${pkgver//.}"
@@ -77,8 +77,11 @@ install=ros2-humble-arch.install
 # makepkg's default "debug" option would also produce a -debug package many times
 # the size of this one; it is rarely used, so skip it. LTO (also a makepkg
 # default) makes MoveIt's link steps use several GB each, and ROS isn't tested
-# with it upstream, so it is off too (PATCHES.md #14).
-options=('!debug' '!lto')
+# with it upstream, so it is off too (PATCHES.md #14). "staticlibs" keeps the
+# static libraries makepkg would otherwise delete: octomap's CMake files list
+# them, and CMake refuses to load a package whose listed files are missing
+# (PATCHES.md #16).
+options=('!debug' '!lto' 'staticlibs')
 
 _ros_root=/opt/ros/humble
 # Eigen 3.4.0 is installed here during the build. It sits inside the Eigen source
@@ -96,7 +99,7 @@ _ignore=(
     qt_gui_cpp rqt_gui_cpp rosidl_typesupport_introspection_tests
     moveit moveit_ros moveit_runtime moveit_plugins
     moveit_ros_perception moveit_ros_benchmarks moveit_ros_control_interface
-    moveit_servo moveit_py moveit_hybrid_planning moveit_chomp_optimizer_adapter
+    moveit_py moveit_hybrid_planning moveit_chomp_optimizer_adapter
     pilz_industrial_motion_planner_testutils
     moveit_planners_trajopt moveit_setup_simulation joint_limits_interface
     generate_parameter_library_example generate_parameter_library_example_external

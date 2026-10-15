@@ -31,6 +31,7 @@ The starting point is the AUR `ros2-humble` recipe at commit `203d02b6e3f2`
 | 13 | `-DBUILD_TESTING=OFF` never reached CMake | One flag per `--cmake-args` argument | `PKGBUILD` |
 | 14 | Running out of memory on MoveIt's large files | Jobs sized to RAM, no LTO | `PKGBUILD` |
 | 15 | `#include <eigen3/Eigen/...>` mixes Eigen 3.4 and 5 | Drop the `eigen3/` prefix | `PKGBUILD` (`prepare()`) |
+| 16 | MoveIt users fail: `liboctomath.a` "does not exist" | Keep static libraries | `PKGBUILD` (`options`), `build.sh check` |
 
 ---
 
@@ -290,14 +291,18 @@ The MoveIt repository is imported whole, but these packages are in `_ignore`:
 | `moveit_ros_perception` | Needs `cv_bridge`, which only accepts OpenCV 4 or 3; Arch has OpenCV 5 |
 | `moveit_ros_benchmarks` | Includes `boost/progress.hpp`, which Boost removed |
 | `moveit_py` | Python bindings, untested on Python 3.14 |
-| `moveit_servo`, `moveit_hybrid_planning` | Not used by the course; servo also pulls in the joystick drivers |
-| `moveit_ros_control_interface`, `moveit_chomp_optimizer_adapter`, `pilz_industrial_motion_planner_testutils` | Not used by the course |
+| `moveit_hybrid_planning`, `moveit_ros_control_interface`, `moveit_chomp_optimizer_adapter`, `pilz_industrial_motion_planner_testutils` | Not used by the course |
 | `moveit`, `moveit_ros`, `moveit_runtime`, `moveit_plugins` | Metapackages that depend on the packages above |
 
 None of them is a dependency of anything that is built: the planning interface,
-move_group, the RViz MotionPlanning panel, the setup assistant and the planners
-are all there. Also not built are the packages in these repositories that Humble
-never released (examples, `moveit_planners_trajopt`, `moveit_setup_simulation`,
+move_group, the RViz MotionPlanning panel, the setup assistant, the planners and
+MoveIt Servo are all there. Servo (`moveit_servo`) is built because the
+Mitsubishi robot's bringup launch file starts its `servo_node_main`. Its
+joystick demo launch files also want the `joy` driver, which is not included;
+servo itself doesn't need it.
+
+Also not built are the packages in these repositories that Humble never
+released (examples, `moveit_planners_trajopt`, `moveit_setup_simulation`,
 `joint_limits_interface`), so Ubuntu users never had them either.
 
 ## 13. `-DBUILD_TESTING=OFF` never reached CMake
@@ -379,6 +384,52 @@ That works the same here and on Ubuntu 22.04. If code you were given uses
 `<eigen3/Eigen/...>` and fails with an error like the one above, change the
 include the same way.
 
+
+## 16. MoveIt users fail: `liboctomath.a` "does not exist"
+
+**Error** (building your own package that uses MoveIt's C++ API, e.g. anything
+with `find_package(moveit_ros_planning_interface)`; found with release
+`2026.02.20-1`):
+
+```
+CMake Error at /opt/ros/humble/share/octomap/octomap-targets.cmake:104 (message):
+  The imported target "octomath-static" references the file
+
+     "/opt/ros/humble/lib/liboctomath.a"
+
+  but this file does not exist.
+```
+
+**Cause:** octomap builds every library twice, shared (`liboctomap.so`) and
+static (`liboctomap.a`), and its installed CMake file lists both. makepkg's
+default `!staticlibs` option deletes any `.a` that has a `.so` next to it, after
+`package()` has run. CMake checks that every file a package lists exists, so
+the first `find_package(octomap)` fails. FCL looks for octomap, MoveIt looks for
+FCL, so every workspace package that uses MoveIt from C++ fails to configure.
+The ROS build itself never noticed, because it found octomap in its own build
+folder, before makepkg deleted anything.
+
+**Fix:** `options=(... 'staticlibs')` keeps the static libraries. They add a few
+MB.
+
+**Check for this whole class of problem:** `./build.sh check` (also run at the
+end of `./build.sh package`) reads every CMake file in `/opt/ros/humble` and
+lists any library they point to that isn't installed. Each CMake file says which
+install folder its paths start from (rviz's bundled OGRE lives in
+`/opt/ros/humble/opt/rviz_ogre_vendor`), and the check works that out the same
+way CMake does.
+
+A missing include folder is only reported as a `note`, because CMake only
+checks those when something links that library. One note is expected:
+
+```
+note: include folder /opt/ros/humble/include/rosbag2_storage_mcap does not exist
+```
+
+`rosbag2_storage_mcap` (0.15.16) lists that folder in its CMake file but never
+installs it, so Ubuntu's package has the same gap. It is a plugin that rosbag2
+loads at run time; nothing links it, so the note is harmless.
+
 ---
 
 ## Other changes from the AUR recipe
@@ -391,7 +442,8 @@ These aren't build fixes, but they differ from AUR `ros2-humble`:
   replace them, and an AUR helper won't swap it back for the AUR version. It
   also conflicts with `ros2-humble-core`, `ros2-humble-extras` and
   `ros2-humble-eigen3`, local packages from before this repository's first
-  release.
+  release, and with `ros2-humble-debug`, the debug-symbols package makepkg
+  splits off the AUR build by default, so pacman offers to remove it too.
 - **Dependencies for the extra repositories:** `boost`, `fmt`, `tl-expected`,
   `qhull`, `bullet`, `libcap`, `elfutils`, `python-jinja`, `python-typeguard`,
   `python-lxml`, `python-graphviz`, `python-rospkg` and `python-yaml`, the Arch

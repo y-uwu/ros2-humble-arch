@@ -7,8 +7,8 @@ from source with the fixes current Arch needs. It contains:
   same set the AUR `ros2-humble` builds: rclcpp/rclpy, tf2, rviz2, rqt, launch,
   rosbag2, the DDS implementations.
 - **MoveIt 2**: move_group, the C++ planning interface (`MoveGroupInterface`),
-  the RViz MotionPlanning panel, the setup assistant, OMPL/CHOMP/Pilz planners
-  and KDL kinematics.
+  the RViz MotionPlanning panel, the setup assistant, OMPL/CHOMP/Pilz planners,
+  KDL kinematics and MoveIt Servo.
 - **ros2_control and ros2_controllers**, including the joint trajectory,
   position, gripper and joint state controllers.
 - **xacro, joint_state_publisher and joint_state_publisher_gui.**
@@ -34,7 +34,7 @@ machine. Eigen 3.4.0 is part of that: course starter code that uses
   update can break it again. [PATCHES.md](PATCHES.md) lists every fix with the
   error it addresses, which is where to start when that happens.
 - **Not included:** the parts of MoveIt the course doesn't use, which are also
-  the ones that don't build on current Arch: perception (OpenCV 5), servo,
+  the ones that don't build on current Arch: perception (OpenCV 5),
   `moveit_py`, benchmarks and hybrid planning. Also not included: Gazebo, and the
   C++ rqt plugins such as `rqt_image_view`. See
   [PATCHES.md](PATCHES.md#known-limitations).
@@ -54,7 +54,7 @@ machine. Eigen 3.4.0 is part of that: course starter code that uses
 ```sh
 sudo pacman -Syu                          # build against an up-to-date system
 sudo pacman -S --needed base-devel git
-git clone https://github.com/<your-github-user>/ros2-humble-arch.git
+git clone https://github.com/y-uwu/ros2-humble-arch.git
 cd ros2-humble-arch
 ./build.sh
 ```
@@ -106,6 +106,14 @@ Load ROS in each shell by adding one line to `~/.zshrc` (or `~/.bashrc` with
 
 ```sh
 source /opt/ros/humble/setup.zsh
+```
+
+Check that every library ROS's CMake files point to is installed. It should end
+with `check done: nothing missing`; one note about `rosbag2_storage_mcap` is
+expected ([PATCHES.md #16](PATCHES.md#16-moveit-users-fail-liboctomatha-does-not-exist)):
+
+```sh
+./build.sh check
 ```
 
 Check that it works, in two terminals:

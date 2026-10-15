@@ -5,6 +5,7 @@
 #   ./build.sh deps                    only the AUR dependency chain
 #   ./build.sh package                 only ros2-humble-arch
 #   ./build.sh --clean package         rebuild it from scratch (e.g. after a Python upgrade)
+#   ./build.sh check                   check the installed package (also run after package)
 #   ./build.sh -y ...                  don't stop to let you read the AUR recipes
 #
 # What each stage does, and nothing more:
@@ -13,7 +14,10 @@
 #           one. Then it stops so you can read them, and builds and installs each
 #           one that is missing or older than the recipe.
 #   package makepkg -sif in this folder (about 3 hours with 16 GB of RAM;
-#           needs ~60 GB free while it builds)
+#           needs ~60 GB free while it builds), then the check below
+#   check   Lists every library or folder that the CMake files in /opt/ros/humble
+#           point to but that isn't installed. Each one would make find_package
+#           fail in your workspaces (PATCHES.md #16).
 #
 # It never edits your shell config or sudoers. sudo asks for your password
 # whenever makepkg installs something.
@@ -28,7 +32,7 @@ clean=0
 say() { printf '\e[1;34m==>\e[0m %s\n' "$*"; }
 die() { printf '\e[1;31merror:\e[0m %s\n' "$*" >&2; exit 1; }
 
-usage() { sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 preflight() {
     [[ -f /etc/arch-release ]] || die "this is for Arch Linux"
@@ -130,6 +134,93 @@ stage_package() {
     (cd "$repo" && BUILDDIR="$repo" PKGDEST="$repo" makepkg -sif) \
         || die "ros2-humble-arch did not build or install; see the output above and PATCHES.md.
        If it built and only the install was declined:  sudo pacman -U $(cd "$repo" && PKGDEST="$repo" makepkg --packagelist | head -n 1)"
+    stage_check
+}
+
+# CMake refuses to load a package if a library its CMake files list is missing,
+# so one missing library breaks every workspace that depends on it. Each CMake
+# file says which install folder its paths start from (rviz's bundled OGRE, for
+# one, lives in opt/rviz_ogre_vendor); the check works that out the same way
+# CMake does. A missing include folder is only reported as a note: CMake only
+# complains about it when something links that library, and one upstream package
+# (rosbag2_storage_mcap) lists a folder it never installs, on Ubuntu too.
+stage_check() {
+    local root=/opt/ros/humble
+    [[ -d $root ]] || die "$root does not exist; install the package first"
+    say "checking the files the CMake files in $root point to"
+    python3 -I - "$root" <<'PY' \
+        || die "the files above are missing from $root; find_package fails for the packages that list them (PATCHES.md #16)"
+import os, re, sys
+
+root = sys.argv[1]
+DEF_FIRST = 'get_filename_component(_IMPORT_PREFIX "${CMAKE_CURRENT_LIST_FILE}" PATH)'
+DEF_UP = 'get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)'
+DEF_ABS = re.compile(r'set\(_IMPORT_PREFIX "(/[^"]*)"\)')
+REF = re.compile(r'\$\{_IMPORT_PREFIX\}(/[^";\s)]*)')
+DIR_PROPS = ('INTERFACE_INCLUDE_DIRECTORIES', 'INTERFACE_SYSTEM_INCLUDE_DIRECTORIES')
+
+prefixes = {}   # (dir, stem) -> prefix computed by that file
+refs = []       # (file, kind, relative path)
+for d, dirs, files in os.walk(root):
+    for name in files:
+        if not name.endswith('.cmake'):
+            continue
+        path = os.path.join(d, name)
+        try:
+            text = open(path, encoding='utf-8', errors='replace').read()
+        except OSError:
+            continue
+        if '_IMPORT_PREFIX' not in text:
+            continue
+        stem = name[:-len('.cmake')]
+        if DEF_FIRST in text:
+            pre = d
+            for _ in range(text.count(DEF_UP)):
+                pre = os.path.dirname(pre)
+            prefixes[(d, stem)] = pre
+        else:
+            m = DEF_ABS.search(text)
+            if m:
+                prefixes[(d, stem)] = m.group(1)
+        for line in text.splitlines():
+            for m in REF.finditer(line):
+                kind = 'dir' if any(p in line for p in DIR_PROPS) else 'file'
+                refs.append((path, kind, m.group(1)))
+
+def prefix_for(path):
+    d, name = os.path.split(path)
+    stem = name[:-len('.cmake')]
+    best = None
+    for (pd, pstem), pre in prefixes.items():
+        if pd == d and stem.startswith(pstem) and (best is None or len(pstem) > len(best[0])):
+            best = (pstem, pre)
+    if best is None:
+        same_dir = {pre for (pd, _), pre in prefixes.items() if pd == d}
+        if len(same_dir) == 1:
+            return same_dir.pop()
+        return None
+    return best[1]
+
+missing_files, missing_dirs, unknown = set(), set(), set()
+for path, kind, rel in refs:
+    pre = prefix_for(path)
+    if pre is None:
+        unknown.add(path)
+        continue
+    target = pre + rel
+    if not os.path.exists(target):
+        (missing_dirs if kind == 'dir' else missing_files).add((target, os.path.relpath(path, root)))
+
+for target, src in sorted(missing_dirs):
+    print(f"    note: include folder {target} does not exist (listed in {src})")
+for path in sorted(unknown):
+    print(f"    note: could not work out the install folder used by {path}")
+for target, src in sorted(missing_files):
+    print(f"    missing: {target} (listed in {src})")
+print(f"checked {len(refs)} references in {len({r[0] for r in refs})} CMake files")
+sys.exit(1 if missing_files else 0)
+PY
+    say "check done: nothing missing"
 }
 
 stages=()
@@ -137,7 +228,7 @@ for arg in "$@"; do
     case $arg in
         -y|--yes)          assume_yes=1 ;;
         --clean)           clean=1 ;;
-        deps|package)      stages+=("$arg") ;;
+        deps|package|check) stages+=("$arg") ;;
         -h|--help)         usage; exit 0 ;;
         *)                 usage; die "unknown argument: $arg" ;;
     esac
