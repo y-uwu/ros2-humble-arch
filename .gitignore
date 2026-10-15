@@ -4,6 +4,7 @@
 /pkg/
 /ros2/
 /eigen-*.tar.gz
+/boost_*.tar.bz2
 *.pkg.tar*
 *.log
 

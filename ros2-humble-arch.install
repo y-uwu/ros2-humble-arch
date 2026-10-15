@@ -8,6 +8,10 @@ post_install() {
 ==> This package ships Eigen 3.4.0 inside /opt/ros/humble. Delete build/ and
     install/ once in any colcon workspace built before it, because CMake caches
     where it found Eigen.
+==> Some course code needs settings colcon reads from ~/.colcon/metadata (the
+    Mitsubishi driver needs Boost 1.86). Link them once, as your normal user:
+      mkdir -p ~/.colcon/metadata
+      ln -sf /usr/share/ros2-humble-arch/ros2-humble-arch.meta ~/.colcon/metadata/
 MSG
 }
 

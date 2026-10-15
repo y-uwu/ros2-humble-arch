@@ -27,13 +27,15 @@
 
 pkgname=ros2-humble-arch
 pkgver=2026.02.20
-pkgrel=2
+pkgrel=3
 _eigen_ver=3.4.0
+_boost_ver=1.86.0
+_boost_dir=boost_${_boost_ver//./_}
 pkgdesc="ROS 2 Humble with MoveIt 2, ros2_control and xacro, built against Eigen 3.4.0 to match Ubuntu 22.04"
 url="https://docs.ros.org/en/humble/"
 arch=('x86_64')
 # Main licenses only; each repository's license text is in /usr/share/licenses/ros2-humble-arch.
-license=('Apache-2.0' 'BSD-3-Clause' 'MPL-2.0')
+license=('Apache-2.0' 'BSD-3-Clause' 'MPL-2.0' 'BSL-1.0')
 depends=(
     'ros2-arch-deps'
     'console-bridge'   # AUR. Without it, console_bridge_vendor builds its bundled copy, which fails on CMake 4
@@ -69,10 +71,16 @@ source=(
     "ros2::git+https://github.com/ros2/ros2#tag=release-humble-${pkgver//.}"
     "eigen-${_eigen_ver}.tar.gz::https://gitlab.com/libeigen/eigen/-/archive/${_eigen_ver}/eigen-${_eigen_ver}.tar.gz"
     'extra.repos'
+    "https://archives.boost.io/release/${_boost_ver}/source/${_boost_dir}.tar.bz2"
+    'ros2-humble-arch.meta'
 )
 sha256sums=('69c4e09effda8125d1a4ce3edaafc3a40b00fb7a2245bc0586d30c81aa701d5f'
             '8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72'
-            'cc10ef6d96324efa8fea6469d128f291b3df7b65a1f3966474f54ef03038e5e6')
+            'cc10ef6d96324efa8fea6469d128f291b3df7b65a1f3966474f54ef03038e5e6'
+            '1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b'
+            '04a3853864ba8fb6864876c55b2cd763b6a4b5097e75a4f5346bdbced88860f0')
+# Only a small part of Boost is used (below), so the archive isn't unpacked whole.
+noextract=("${_boost_dir}.tar.bz2")
 install=ros2-humble-arch.install
 # makepkg's default "debug" option would also produce a -debug package many times
 # the size of this one; it is rarely used, so skip it. LTO (also a makepkg
@@ -87,6 +95,21 @@ _ros_root=/opt/ros/humble
 # Eigen 3.4.0 is installed here during the build. It sits inside the Eigen source
 # folder, which carries a COLCON_IGNORE so colcon never treats Eigen as a ROS package.
 _eigen_stage=eigen-${_eigen_ver}/stage
+
+# Boost 1.86 headers for course code written against Boost.Asio APIs that Boost
+# 1.87 removed (PATCHES.md #17). Installed outside CMake's search paths, in
+# /opt/ros/humble/opt/boost_1_86, and used only by the packages that
+# ros2-humble-arch.meta points at it. Only the libraries Boost.Asio uses are
+# kept: the headers GCC 16 opens for the Mitsubishi driver's Asio code, in C++17
+# to C++23 mode, taken a whole library folder at a time. 22 MB instead of 180.
+_boost_stage=boost-${_boost_ver}
+_boost_root=$_ros_root/opt/boost_1_86
+_boost_subset=(
+    asio asio.hpp assert assert.hpp cerrno.hpp config config.hpp core cstdint.hpp
+    date_time detail exception limits.hpp mpl numeric/conversion operators.hpp
+    preprocessor shared_ptr.hpp smart_ptr static_assert.hpp system
+    throw_exception.hpp type.hpp type_traits version.hpp
+)
 
 # Not built:
 #  - qt_gui_cpp, rqt_gui_cpp: as in the AUR recipe (C++ rqt plugins)
@@ -153,6 +176,61 @@ prepare() {
         printf 'Eigen include fixed: %s\n' "${f#"$srcdir"/ros2/src/}"
     done < <(grep -rlIZE --exclude-dir=.git \
                  '#[[:space:]]*include[[:space:]]*[<"]eigen3/' "$srcdir/ros2/src" || true)
+
+    _boost_subset_prepare
+}
+
+# (PATCHES.md #17) Unpack the Boost 1.86 subset, then prove it is enough: code
+# using Asio the way mitsubishi_robot_hardware does must compile against it
+# without a single header coming from the system Boost in /usr/include.
+_boost_subset_prepare() {
+    local b=$srcdir/$_boost_stage members=() m std deps
+    rm -rf "$b"
+    mkdir -p "$b/include"
+    for m in "${_boost_subset[@]}"; do
+        members+=("$_boost_dir/boost/$m")
+    done
+    bsdtar -xf "$srcdir/$_boost_dir.tar.bz2" -C "$b/include" --strip-components 1 \
+        "${members[@]}" "$_boost_dir/LICENSE_1_0.txt"
+    mv "$b/include/LICENSE_1_0.txt" "$b/"
+
+    cat > "$b/asio_test.cpp" <<'EOF'
+#include <boost/asio.hpp>
+#include <cstring>
+#include <memory>
+#include <string>
+void asio_test()
+{
+  auto io = std::make_unique<boost::asio::io_service>();
+  boost::asio::ip::tcp::socket tcp_socket(*io);
+  boost::asio::ip::udp::socket udp_socket(*io);
+  boost::asio::ip::tcp::resolver tcp_resolver(*io);
+  boost::asio::ip::tcp::resolver::query tcp_query(boost::asio::ip::tcp::v4(), "localhost", "10001");
+  boost::asio::connect(tcp_socket, tcp_resolver.resolve(tcp_query));
+  boost::asio::ip::udp::resolver udp_resolver(*io);
+  boost::asio::ip::udp::resolver::query udp_query(boost::asio::ip::udp::v4(), "localhost", "10000");
+  auto endpoints = udp_resolver.resolve(udp_query);
+  udp_socket.open(boost::asio::ip::udp::v4());
+  udp_socket.bind(boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 0));
+  udp_socket.connect(*endpoints.begin());
+  char buf[8] = "x\r";
+  boost::asio::write(tcp_socket, boost::asio::buffer(buf, std::strlen(buf)));
+  boost::asio::streambuf reply;
+  boost::asio::read_until(tcp_socket, reply, '\r');
+  udp_socket.send(boost::asio::buffer(buf, sizeof(buf)));
+  udp_socket.receive(boost::asio::buffer(buf, sizeof(buf)));
+}
+EOF
+    for std in c++17 gnu++20 c++23; do
+        g++ -std=$std -fsyntax-only -isystem "$b/include" "$b/asio_test.cpp"
+        deps=$(g++ -std=$std -M -isystem "$b/include" "$b/asio_test.cpp")
+        if [[ $deps == */usr/include/boost/* ]]; then
+            printf 'The Boost subset is missing headers (-std=%s); these came from /usr/include/boost:\n' "$std" >&2
+            grep -o '/usr/include/boost/[^ ]*' <<< "$deps" >&2
+            return 1
+        fi
+    done
+    printf 'Boost %s subset: Asio test compiles with C++17, GNU C++20 and C++23\n' "$_boost_ver"
 }
 
 build() {
@@ -221,6 +299,9 @@ package() {
     mkdir -p "$root"
     cp -r "$srcdir"/install/* "$root"/
     cp -a "$stage"/. "$root"/
+    mkdir -p "$pkgdir$_boost_root"
+    cp -a "$srcdir/$_boost_stage/include" "$pkgdir$_boost_root/"
+    install -Dm644 "$srcdir/ros2-humble-arch.meta" "$pkgdir/usr/share/$pkgname/ros2-humble-arch.meta"
 
     # Installed text files can contain two build-time paths: the Eigen staging
     # folder (packages that record Eigen's include path in their CMake or
@@ -254,6 +335,7 @@ package() {
     for lic in "$srcdir/eigen-${_eigen_ver}"/COPYING.*; do
         install -Dm644 "$lic" "$licdir/eigen-${lic##*/}"
     done
+    install -Dm644 "$srcdir/$_boost_stage/LICENSE_1_0.txt" "$licdir/boost-LICENSE_1_0.txt"
 }
 
 # A shell with ROS sourced (as ~/.zshrc usually does) lets CMake find the installed

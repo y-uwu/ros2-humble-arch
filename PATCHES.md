@@ -32,6 +32,7 @@ The starting point is the AUR `ros2-humble` recipe at commit `203d02b6e3f2`
 | 14 | Running out of memory on MoveIt's large files | Jobs sized to RAM, no LTO | `PKGBUILD` |
 | 15 | `#include <eigen3/Eigen/...>` mixes Eigen 3.4 and 5 | Drop the `eigen3/` prefix | `PKGBUILD` (`prepare()`) |
 | 16 | MoveIt users fail: `liboctomath.a` "does not exist" | Keep static libraries | `PKGBUILD` (`options`), `build.sh check` |
+| 17 | Mitsubishi driver: `io_service` / `resolver::query` removed in Boost 1.87 | Boost 1.86 headers for that package only | `PKGBUILD`, `ros2-humble-arch.meta` |
 
 ---
 
@@ -430,6 +431,57 @@ note: include folder /opt/ros/humble/include/rosbag2_storage_mcap does not exist
 installs it, so Ubuntu's package has the same gap. It is a plugin that rosbag2
 loads at run time; nothing links it, so the note is harmless.
 
+## 17. Mitsubishi driver: `boost::asio::io_service` and `resolver::query`
+
+**Error** (building `mitsubishi_robot_hardware` from
+[mitsubishi_ros2](https://github.com/Vanderbilt-Applied-Robotics-Lab/mitsubishi_ros2)):
+
+```
+mitsubishi_robot_hardware.hpp:109:38: error: 'io_service' is not a member of 'boost::asio'; did you mean 'use_service'?
+mitsubishi_robot_hardware.cpp:46:45: error: 'query' is not a member of 'boost::asio::ip::tcp::resolver'
+```
+
+**Cause:** the driver uses `boost::asio::io_service` and
+`ip::tcp::resolver::query` / `ip::udp::resolver::query`. Boost deprecated
+them years ago and removed them in 1.87. Ubuntu 22.04 has Boost 1.74, so the
+driver builds there; Arch has a newer Boost. Nothing else changes between the
+two: the driver uses only Boost.Asio, which is header-only, and asks CMake for
+plain `find_package(Boost REQUIRED)` with no compiled components.
+
+**Fix, without touching the course code:**
+
+- The package installs a part of the **Boost 1.86.0** headers (the last
+  release with both APIs) into `/opt/ros/humble/opt/boost_1_86/include`. CMake
+  never looks there on its own, so nothing else picks them up. The download is
+  checked against the checksum Boost publishes.
+- Only the libraries Asio needs are kept, 22 MB instead of 180 MB: the headers
+  GCC 16 opens when compiling the driver's Asio code in C++17, C++20 and C++23
+  mode, taken a whole library folder at a time (`_boost_subset` in the
+  PKGBUILD). `prepare()` compiles a copy of the driver's Asio calls against the
+  subset and stops the build if any header would come from the system Boost
+  instead, so a future GCC that needs another header fails loudly at build
+  time rather than silently mixing Boost versions.
+- `ros2-humble-arch.meta` (installed in `/usr/share/ros2-humble-arch/`) is a
+  colcon settings file. Once linked into `~/.colcon/metadata/` (README, "After
+  installing"), colcon passes these CMake arguments to `mitsubishi_robot_hardware`
+  and no other package:
+  `-DBoost_NO_BOOST_CMAKE=ON -DBoost_NO_SYSTEM_PATHS=ON
+  -DBOOST_INCLUDEDIR=/opt/ros/humble/opt/boost_1_86/include`, plus
+  `-UBoost_INCLUDE_DIR -UBoost_DIR` so a workspace whose earlier build failed
+  doesn't keep the old location CMake saved. The course instructions stay the
+  same: plain `colcon build`.
+
+Tested with a package laid out like the driver: without the link it fails with
+the error above; with it, it builds, including in a workspace that had already
+failed, while another package in the same workspace that links Boost's compiled
+libraries keeps Arch's Boost. The plugin links no Boost library, so loading it
+into `ros2_control_node` mixes nothing.
+
+The lasting fix belongs in the driver: `io_context` instead of `io_service`,
+and `resolver.resolve(protocol, host, port)` instead of building a `query`.
+That compiles with Boost 1.74 and 1.92 alike, and would make this workaround
+unnecessary.
+
 ---
 
 ## Other changes from the AUR recipe
@@ -472,7 +524,8 @@ These aren't build fixes, but they differ from AUR `ros2-humble`:
 
 ## Known limitations
 
-- **Licenses:** the `license` field names the three main licenses. Individual
+- **Licenses:** the `license` field names the four main licenses (Boost's
+  BSL-1.0 for the Boost 1.86 headers, #17). Individual
   packages carry their own, e.g. LGPL (orocos KDL) and EPL (Cyclone DDS); all
   texts are in `/usr/share/licenses/ros2-humble-arch`.
 - **Not included:** the MoveIt packages in #12, Gazebo, and anything else not in

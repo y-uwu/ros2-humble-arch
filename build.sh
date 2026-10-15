@@ -221,6 +221,15 @@ print(f"checked {len(refs)} references in {len({r[0] for r in refs})} CMake file
 sys.exit(1 if missing_files else 0)
 PY
     say "check done: nothing missing"
+
+    # The colcon settings this package ships only take effect once linked (PATCHES.md #17).
+    local meta=/usr/share/ros2-humble-arch/ros2-humble-arch.meta
+    local link=${COLCON_HOME:-$HOME/.colcon}/metadata/ros2-humble-arch.meta
+    if [[ -f $meta && ! $link -ef $meta ]]; then
+        say "note: colcon is not using the package's settings for course code yet. Link them once:"
+        echo "    mkdir -p ${link%/*}"
+        echo "    ln -sf $meta ${link%/*}/"
+    fi
 }
 
 stages=()

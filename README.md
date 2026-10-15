@@ -132,6 +132,19 @@ Then:
   `/opt/ros/humble/share/eigen3/cmake`.
 - **rviz2 on Wayland:** add `export QT_QPA_PLATFORM=xcb` to your shell config.
 - **rqt_plot:** `sudo pacman -S --needed python-pyqtgraph python-matplotlib`.
+- **Course code that needs older libraries:** link the colcon settings this
+  package ships, once per user:
+
+  ```sh
+  mkdir -p ~/.colcon/metadata
+  ln -sf /usr/share/ros2-humble-arch/ros2-humble-arch.meta ~/.colcon/metadata/
+  ```
+
+  colcon then builds the Mitsubishi driver (`mitsubishi_robot_hardware`)
+  against the Boost 1.86 headers in `/opt/ros/humble/opt/boost_1_86`; every
+  other package keeps Arch's Boost
+  ([PATCHES.md #17](PATCHES.md#17-mitsubishi-driver-boostasioio_service-and-resolverquery)).
+  `./build.sh check` reminds you if the link is missing.
 - **rosdep:** course instructions often say
   `rosdep install --from-paths src --ignore-src -r -y`. Run
   `sudo rosdep init && rosdep update` once first. With ROS sourced, rosdep then
@@ -165,6 +178,7 @@ enough:
 build.sh                 runs the two stages
 PKGBUILD                 ros2-humble-arch
 ros2-humble-arch.install message pacman prints after install
+ros2-humble-arch.meta    colcon settings for course code (PATCHES.md #17)
 extra.repos              repositories built on top of ros2.repos, pinned
 deps/aur.lock            AUR dependency recipes, build order, pinned commits
 deps/patches/            our changes to three of them
