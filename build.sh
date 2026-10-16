@@ -17,7 +17,8 @@
 #           needs ~60 GB free while it builds), then the check below
 #   check   Lists every library or folder that the CMake files in /opt/ros/humble
 #           point to but that isn't installed. Each one would make find_package
-#           fail in your workspaces (PATCHES.md #16).
+#           fail in your workspaces (PATCHES.md #16). Then checks that sourcing
+#           ROS turns on the settings for course code (PATCHES.md #17).
 #
 # It never edits your shell config or sudoers. sudo asks for your password
 # whenever makepkg installs something.
@@ -220,16 +221,21 @@ for target, src in sorted(missing_files):
 print(f"checked {len(refs)} references in {len({r[0] for r in refs})} CMake files")
 sys.exit(1 if missing_files else 0)
 PY
-    say "check done: nothing missing"
-
-    # The colcon settings this package ships only take effect once linked (PATCHES.md #17).
-    local meta=/usr/share/ros2-humble-arch/ros2-humble-arch.meta
-    local link=${COLCON_HOME:-$HOME/.colcon}/metadata/ros2-humble-arch.meta
-    if [[ -f $meta && ! $link -ef $meta ]]; then
-        say "note: colcon is not using the package's settings for course code yet. Link them once:"
-        echo "    mkdir -p ${link%/*}"
-        echo "    ln -sf $meta ${link%/*}/"
+    # Settings for course code come from the setup scripts (PATCHES.md #17).
+    local want=$root/share/ros2_humble_arch/cmake/toolchain.cmake got
+    got=$(env -i HOME="$HOME" bash -c ". $root/setup.bash >/dev/null 2>&1; printf %s \"\${CMAKE_TOOLCHAIN_FILE:-}\"")
+    if [[ $got != "$want" ]]; then
+        die "sourcing $root/setup.bash does not set CMAKE_TOOLCHAIN_FILE to $want (PATCHES.md #17)"
     fi
+    if [[ -n ${CMAKE_TOOLCHAIN_FILE:-} && $CMAKE_TOOLCHAIN_FILE != "$want" ]]; then
+        say "note: this shell sets CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_FILE, so the course-code settings are off here"
+    fi
+    local link=${COLCON_HOME:-$HOME/.colcon}/metadata/ros2-humble-arch.meta
+    if [[ -L $link || -e $link ]]; then
+        say "note: $link is from an earlier version and no longer used; colcon reports it missing. Remove it:"
+        echo "    rm -f $link"
+    fi
+    say "check done: nothing missing"
 }
 
 stages=()

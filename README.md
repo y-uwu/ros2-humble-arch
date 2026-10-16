@@ -132,19 +132,27 @@ Then:
   `/opt/ros/humble/share/eigen3/cmake`.
 - **rviz2 on Wayland:** add `export QT_QPA_PLATFORM=xcb` to your shell config.
 - **rqt_plot:** `sudo pacman -S --needed python-pyqtgraph python-matplotlib`.
-- **Course code that needs older libraries:** link the colcon settings this
-  package ships, once per user:
+- **Course code that needs older libraries** builds with plain `colcon build`.
+  Sourcing the setup script sets `CMAKE_TOOLCHAIN_FILE`, which gives the
+  Mitsubishi driver (`mitsubishi_robot_hardware`) the Boost 1.86 headers in
+  `/opt/ros/humble/opt/boost_1_86` and changes nothing for any other project
+  ([PATCHES.md #17](PATCHES.md#17-mitsubishi-driver-boostasioio_service-and-resolverquery)).
+  If you linked `ros2-humble-arch.meta` into `~/.colcon/metadata` for an
+  earlier version, remove that link.
+- **Gazebo Classic isn't available on Arch** (it reached end of life in January
+  2025). Workspaces that import `gazebo_ros2_control`, like the DENSO driver's,
+  would fail on that one package and colcon would stop there. Skip it for every
+  build by adding this to `~/.colcon/defaults.yaml` (under an existing `build:`
+  section if the file has one):
 
-  ```sh
-  mkdir -p ~/.colcon/metadata
-  ln -sf /usr/share/ros2-humble-arch/ros2-humble-arch.meta ~/.colcon/metadata/
+  ```yaml
+  build:
+    packages-skip: [gazebo_ros2_control]
   ```
 
-  colcon then builds the Mitsubishi driver (`mitsubishi_robot_hardware`)
-  against the Boost 1.86 headers in `/opt/ros/humble/opt/boost_1_86`; every
-  other package keeps Arch's Boost
-  ([PATCHES.md #17](PATCHES.md#17-mitsubishi-driver-boostasioio_service-and-resolverquery)).
-  `./build.sh check` reminds you if the link is missing.
+  Everything else builds as on Ubuntu. Simulations that run inside Gazebo
+  Classic (DENSO's `sim:=true`) need an Ubuntu machine. In workspaces without
+  that package, colcon prints one harmless `ignoring unknown package` warning.
 - **rosdep:** course instructions often say
   `rosdep install --from-paths src --ignore-src -r -y`. Run
   `sudo rosdep init && rosdep update` once first. With ROS sourced, rosdep then
@@ -178,7 +186,6 @@ enough:
 build.sh                 runs the two stages
 PKGBUILD                 ros2-humble-arch
 ros2-humble-arch.install message pacman prints after install
-ros2-humble-arch.meta    colcon settings for course code (PATCHES.md #17)
 extra.repos              repositories built on top of ros2.repos, pinned
 deps/aur.lock            AUR dependency recipes, build order, pinned commits
 deps/patches/            our changes to three of them

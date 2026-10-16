@@ -27,7 +27,7 @@
 
 pkgname=ros2-humble-arch
 pkgver=2026.02.20
-pkgrel=3
+pkgrel=4
 _eigen_ver=3.4.0
 _boost_ver=1.86.0
 _boost_dir=boost_${_boost_ver//./_}
@@ -72,13 +72,11 @@ source=(
     "eigen-${_eigen_ver}.tar.gz::https://gitlab.com/libeigen/eigen/-/archive/${_eigen_ver}/eigen-${_eigen_ver}.tar.gz"
     'extra.repos'
     "https://archives.boost.io/release/${_boost_ver}/source/${_boost_dir}.tar.bz2"
-    'ros2-humble-arch.meta'
 )
 sha256sums=('69c4e09effda8125d1a4ce3edaafc3a40b00fb7a2245bc0586d30c81aa701d5f'
             '8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72'
             'cc10ef6d96324efa8fea6469d128f291b3df7b65a1f3966474f54ef03038e5e6'
-            '1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b'
-            '04a3853864ba8fb6864876c55b2cd763b6a4b5097e75a4f5346bdbced88860f0')
+            '1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b')
 # Only a small part of Boost is used (below), so the archive isn't unpacked whole.
 noextract=("${_boost_dir}.tar.bz2")
 install=ros2-humble-arch.install
@@ -98,8 +96,8 @@ _eigen_stage=eigen-${_eigen_ver}/stage
 
 # Boost 1.86 headers for course code written against Boost.Asio APIs that Boost
 # 1.87 removed (PATCHES.md #17). Installed outside CMake's search paths, in
-# /opt/ros/humble/opt/boost_1_86, and used only by the packages that
-# ros2-humble-arch.meta points at it. Only the libraries Boost.Asio uses are
+# /opt/ros/humble/opt/boost_1_86, and used only by the projects that
+# _course_settings_install (below) names. Only the libraries Boost.Asio uses are
 # kept: the headers GCC 16 opens for the Mitsubishi driver's Asio code, in C++17
 # to C++23 mode, taken a whole library folder at a time. 22 MB instead of 180.
 _boost_stage=boost-${_boost_ver}
@@ -301,7 +299,7 @@ package() {
     cp -a "$stage"/. "$root"/
     mkdir -p "$pkgdir$_boost_root"
     cp -a "$srcdir/$_boost_stage/include" "$pkgdir$_boost_root/"
-    install -Dm644 "$srcdir/ros2-humble-arch.meta" "$pkgdir/usr/share/$pkgname/ros2-humble-arch.meta"
+    _course_settings_install
 
     # Installed text files can contain two build-time paths: the Eigen staging
     # folder (packages that record Eigen's include path in their CMake or
@@ -338,6 +336,51 @@ package() {
     install -Dm644 "$srcdir/$_boost_stage/LICENSE_1_0.txt" "$licdir/boost-LICENSE_1_0.txt"
 }
 
+# (PATCHES.md #17) Settings some course code needs on Arch, applied with no
+# colcon options and no files in your home folder. Sourcing the setup scripts
+# sets CMAKE_TOOLCHAIN_FILE (unless it is already set) to a file that sets no
+# compiler or platform: it only names the projects that need extra settings.
+# CMake reads a project's settings file right after that project's project()
+# call; every other project configures exactly as it would without it.
+_course_settings_install() {
+    local share=$pkgdir$_ros_root/share/ros2_humble_arch
+    mkdir -p "$share/cmake/projects" "$pkgdir$_ros_root/share/colcon-core/packages"
+
+    cat > "$share/cmake/toolchain.cmake" <<'EOF'
+# ros2-humble-arch (PATCHES.md #17). Sourcing /opt/ros/humble/setup.* sets
+# CMAKE_TOOLCHAIN_FILE to this file unless it is already set. It sets no
+# compiler or platform; it only names projects that need extra settings, which
+# CMake reads right after that project's project() call. Every other project
+# configures exactly as without it.
+set(CMAKE_PROJECT_mitsubishi_robot_hardware_INCLUDE
+    "${CMAKE_CURRENT_LIST_DIR}/projects/mitsubishi_robot_hardware.cmake")
+EOF
+
+    cat > "$share/cmake/projects/mitsubishi_robot_hardware.cmake" <<EOF
+# ros2-humble-arch (PATCHES.md #17). The Mitsubishi driver uses Boost.Asio's
+# io_service and resolver::query, which Boost 1.87 removed. Build it against
+# the Boost 1.86 headers in $_boost_root, as it builds against
+# Boost 1.74 on Ubuntu 22.04, instead of Arch's newer Boost. Clearing the two
+# cached paths makes CMake look again on every configure instead of reusing a
+# location it saved before.
+message(STATUS "ros2-humble-arch: mitsubishi_robot_hardware uses the Boost 1.86 headers in $_boost_root")
+set(Boost_NO_BOOST_CMAKE ON)
+set(Boost_NO_SYSTEM_PATHS ON)
+set(BOOST_INCLUDEDIR $_boost_root/include)
+unset(Boost_INCLUDE_DIR CACHE)
+unset(Boost_DIR CACHE)
+EOF
+
+    # The setup scripts apply share/<package>/package.dsv for every name listed in
+    # share/colcon-core/packages; this entry has no dependencies and no ament index
+    # entry, so `ros2 pkg list` doesn't show it.
+    printf 'set-if-unset;CMAKE_TOOLCHAIN_FILE;share/ros2_humble_arch/cmake/toolchain.cmake\n' \
+        > "$share/package.dsv"
+    : > "$pkgdir$_ros_root/share/colcon-core/packages/ros2_humble_arch"
+    chmod 644 "$share/cmake/toolchain.cmake" "$share/cmake/projects/mitsubishi_robot_hardware.cmake" \
+              "$share/package.dsv" "$pkgdir$_ros_root/share/colcon-core/packages/ros2_humble_arch"
+}
+
 # A shell with ROS sourced (as ~/.zshrc usually does) lets CMake find the installed
 # /opt/ros/humble, or a sourced workspace, while the new one builds. Vendor packages
 # then skip libraries they think already exist, and the new package can ship
@@ -354,6 +397,6 @@ _clean_ros_env() {
     done
     PATH=$(IFS=:; printf '%s' "${keep[*]}")
     unset AMENT_PREFIX_PATH AMENT_CURRENT_PREFIX COLCON_PREFIX_PATH CMAKE_PREFIX_PATH \
-          PYTHONPATH LD_LIBRARY_PATH PKG_CONFIG_PATH RMW_IMPLEMENTATION \
+          CMAKE_TOOLCHAIN_FILE PYTHONPATH LD_LIBRARY_PATH PKG_CONFIG_PATH RMW_IMPLEMENTATION \
           ROS_DISTRO ROS_VERSION ROS_PYTHON_VERSION ROS_LOCALHOST_ONLY ROS_DOMAIN_ID
 }

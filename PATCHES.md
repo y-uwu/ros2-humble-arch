@@ -32,7 +32,7 @@ The starting point is the AUR `ros2-humble` recipe at commit `203d02b6e3f2`
 | 14 | Running out of memory on MoveIt's large files | Jobs sized to RAM, no LTO | `PKGBUILD` |
 | 15 | `#include <eigen3/Eigen/...>` mixes Eigen 3.4 and 5 | Drop the `eigen3/` prefix | `PKGBUILD` (`prepare()`) |
 | 16 | MoveIt users fail: `liboctomath.a` "does not exist" | Keep static libraries | `PKGBUILD` (`options`), `build.sh check` |
-| 17 | Mitsubishi driver: `io_service` / `resolver::query` removed in Boost 1.87 | Boost 1.86 headers for that package only | `PKGBUILD`, `ros2-humble-arch.meta` |
+| 17 | Mitsubishi driver: `io_service` / `resolver::query` removed in Boost 1.87 | Boost 1.86 headers for that package only | `PKGBUILD`, `build.sh check` |
 
 ---
 
@@ -223,7 +223,8 @@ middleware compiled into `rmw_implementation`.
 
 **Fix:** `build()` first removes the `bin/` folder of every sourced ROS install
 or workspace (and anything under `/opt/ros`) from `PATH`. It then unsets the
-ROS and colcon variables, including `RMW_IMPLEMENTATION`.
+ROS and colcon variables, including `RMW_IMPLEMENTATION` and the
+`CMAKE_TOOLCHAIN_FILE` that the installed package's setup scripts set (#17).
 
 ## 9. colcon can't see the `octomap` package
 
@@ -461,21 +462,37 @@ plain `find_package(Boost REQUIRED)` with no compiled components.
   subset and stops the build if any header would come from the system Boost
   instead, so a future GCC that needs another header fails loudly at build
   time rather than silently mixing Boost versions.
-- `ros2-humble-arch.meta` (installed in `/usr/share/ros2-humble-arch/`) is a
-  colcon settings file. Once linked into `~/.colcon/metadata/` (README, "After
-  installing"), colcon passes these CMake arguments to `mitsubishi_robot_hardware`
-  and no other package:
-  `-DBoost_NO_BOOST_CMAKE=ON -DBoost_NO_SYSTEM_PATHS=ON
-  -DBOOST_INCLUDEDIR=/opt/ros/humble/opt/boost_1_86/include`, plus
-  `-UBoost_INCLUDE_DIR -UBoost_DIR` so a workspace whose earlier build failed
-  doesn't keep the old location CMake saved. The course instructions stay the
-  same: plain `colcon build`.
+- Sourcing `/opt/ros/humble/setup.*` sets `CMAKE_TOOLCHAIN_FILE` to
+  `/opt/ros/humble/share/ros2_humble_arch/cmake/toolchain.cmake`, unless it is
+  already set. (The setup scripts apply `share/ros2_humble_arch/package.dsv`
+  because `share/colcon-core/packages` lists `ros2_humble_arch`; it has no
+  ament index entry, so `ros2 pkg list` doesn't show it.) CMake reads that file
+  when it configures a new build folder. It sets no compiler or platform; it
+  only sets `CMAKE_PROJECT_mitsubishi_robot_hardware_INCLUDE`, a file CMake
+  runs right after that one project's `project()` call:
+  `Boost_NO_BOOST_CMAKE`, `Boost_NO_SYSTEM_PATHS` and
+  `BOOST_INCLUDEDIR=/opt/ros/humble/opt/boost_1_86/include`, and clears the
+  cached `Boost_INCLUDE_DIR` and `Boost_DIR`. Every other project configures
+  exactly as without it. The course instructions stay the same: `colcon build`
+  with no options, and nothing to set up in your home folder.
+- `./build.sh check` fails if sourcing the setup script doesn't set it.
+- Earlier versions shipped `ros2-humble-arch.meta`, a colcon settings file you
+  linked into `~/.colcon/metadata`. It is gone; remove the link, or colcon
+  reports it missing on every build (the upgrade message and `./build.sh check`
+  say so).
 
-Tested with a package laid out like the driver: without the link it fails with
-the error above; with it, it builds, including in a workspace that had already
-failed, while another package in the same workspace that links Boost's compiled
-libraries keeps Arch's Boost. The plugin links no Boost library, so loading it
-into `ros2_control_node` mixes nothing.
+Tested with a package laid out like the driver, in a workspace built with
+nothing but `source /opt/ros/humble/setup.bash` and `colcon build`: it builds
+against Boost 1.86, while another package in the same workspace that links
+Boost's compiled libraries keeps Arch's Boost 1.92. A plain CMake project
+configured in the same shell gets the same CMake cache as without ROS sourced,
+apart from the toolchain entry. The plugin links no Boost library, so loading
+it into `ros2_control_node` mixes nothing.
+
+CMake reads `CMAKE_TOOLCHAIN_FILE` only when it creates a build folder. A
+`build/mitsubishi_robot_hardware` folder from before this package was installed
+keeps failing until you delete it (the install message says to delete
+`build/` and `install/` once).
 
 The lasting fix belongs in the driver: `io_context` instead of `io_service`,
 and `resolver.resolve(protocol, host, port)` instead of building a `query`.
