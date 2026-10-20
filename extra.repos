@@ -6,8 +6,10 @@
 # The set is what the course needs: MoveIt 2 (move_group, planning interface,
 # RViz MotionPlanning plugin, setup assistant, OMPL/CHOMP/Pilz planners, KDL
 # kinematics), ros2_control and ros2_controllers, xacro, joint_state_publisher,
-# and everything those depend on. ompl, fcl and libccd are system libraries on
-# Ubuntu; they are built here so they use the same Eigen 3.4.0 as everything else.
+# teleop (joy, teleop_twist_joy and teleop_twist_keyboard, which Ubuntu's
+# ros-humble-desktop includes, plus joy_linux), and everything those depend on.
+# ompl, fcl and libccd are system libraries on Ubuntu; they are built here so
+# they use the same Eigen 3.4.0 as everything else.
 #
 # To add a repository: append an entry with its released version, then rebuild.
 repositories:
@@ -35,6 +37,10 @@ repositories:
     type: git
     url: https://github.com/PickNikRobotics/cpp_polyfills.git
     version: 1.3.2
+  extra/diagnostics:
+    type: git
+    url: https://github.com/ros/diagnostics.git
+    version: 4.0.7
   extra/eigen_stl_containers:
     type: git
     url: https://github.com/ros/eigen_stl_containers.git
@@ -63,6 +69,10 @@ repositories:
     type: git
     url: https://github.com/ros/joint_state_publisher.git
     version: 2.4.0
+  extra/joystick_drivers:
+    type: git
+    url: https://github.com/ros-drivers/joystick_drivers.git
+    version: 3.3.0
   extra/kinematics_interface:
     type: git
     url: https://github.com/ros-controls/kinematics_interface.git
@@ -135,6 +145,14 @@ repositories:
     type: git
     url: https://github.com/ros-planning/srdfdom.git
     version: 2.0.7
+  extra/teleop_twist_joy:
+    type: git
+    url: https://github.com/ros2/teleop_twist_joy.git
+    version: 2.4.8
+  extra/teleop_twist_keyboard:
+    type: git
+    url: https://github.com/ros2/teleop_twist_keyboard.git
+    version: 2.4.1
   extra/urdf_parser_py:
     type: git
     url: https://github.com/ros/urdf_parser_py.git

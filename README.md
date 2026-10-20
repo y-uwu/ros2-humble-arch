@@ -12,6 +12,10 @@ from source with the fixes current Arch needs. It contains:
 - **ros2_control and ros2_controllers**, including the joint trajectory,
   position, gripper and joint state controllers.
 - **xacro, joint_state_publisher and joint_state_publisher_gui.**
+- **Teleop:** `joy` (game controllers through SDL2), `joy_linux` (the kernel's
+  `/dev/input/js*` devices), `teleop_twist_joy` and `teleop_twist_keyboard`.
+  Ubuntu's `ros-humble-desktop` includes all of these except `joy_linux`, which
+  is `sudo apt install ros-humble-joy-linux` there.
 
 Everything is pinned to the versions Humble released for Ubuntu 22.04
 (see [`extra.repos`](extra.repos)) and built against **Eigen 3.4.0**, the

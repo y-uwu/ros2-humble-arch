@@ -300,12 +300,19 @@ None of them is a dependency of anything that is built: the planning interface,
 move_group, the RViz MotionPlanning panel, the setup assistant, the planners and
 MoveIt Servo are all there. Servo (`moveit_servo`) is built because the
 Mitsubishi robot's bringup launch file starts its `servo_node_main`. Its
-joystick demo launch files also want the `joy` driver, which is not included;
-servo itself doesn't need it.
+joystick demo launch files also want the `joy` driver, which is included from
+`2026.02.20-5` on (`extra.repos`); servo itself doesn't need it.
 
 Also not built are the packages in these repositories that Humble never
 released (examples, `moveit_planners_trajopt`, `moveit_setup_simulation`,
 `joint_limits_interface`), so Ubuntu users never had them either.
+
+From the joystick and diagnostics repositories only the teleop packages are
+built: `joy`, `joy_linux`, `sdl2_vendor` and `diagnostic_updater` (which
+`joy_linux` needs). `spacenav` and `wiimote` would need libspnav and cwiid, and
+nothing the course uses needs the rest of diagnostics. `sdl2_vendor` finds
+Arch's SDL2 (`sdl2-compat`, in `depends`), so it doesn't download and build its
+own copy of SDL.
 
 ## 13. `-DBUILD_TESTING=OFF` never reached CMake
 
@@ -515,8 +522,8 @@ These aren't build fixes, but they differ from AUR `ros2-humble`:
   splits off the AUR build by default, so pacman offers to remove it too.
 - **Dependencies for the extra repositories:** `boost`, `fmt`, `tl-expected`,
   `qhull`, `bullet`, `libcap`, `elfutils`, `python-jinja`, `python-typeguard`,
-  `python-lxml`, `python-graphviz`, `python-rospkg` and `python-yaml`, the Arch
-  equivalents of what rosdep installs for them on Ubuntu.
+  `python-lxml`, `python-graphviz`, `python-rospkg`, `python-yaml` and `sdl2`
+  (for `joy`), the Arch equivalents of what rosdep installs for them on Ubuntu.
 - **Runtime dependencies Ubuntu's `ros-humble-desktop` pulls in:**
   `python-psutil` (needed by `ros2 doctor`) is in `depends`.
   `python-matplotlib` and `python-pyqtgraph` are `optdepends`. Without one of

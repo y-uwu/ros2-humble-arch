@@ -4,7 +4,8 @@
 # everything in ROS 2's ros2.repos release manifest (what the AUR ros2-humble
 # builds: rclcpp/rclpy, tf2, rviz2, rqt, launch, rosbag2, ...) plus the
 # repositories in extra.repos: MoveIt 2, ros2_control, ros2_controllers, xacro,
-# joint_state_publisher and their dependencies. Everything is built against
+# joint_state_publisher, teleop (joy, teleop_twist_joy, teleop_twist_keyboard)
+# and their dependencies. Everything is built against
 # Eigen 3.4.0, the version Ubuntu 22.04 ships, and installed with it into
 # /opt/ros/humble.
 #
@@ -27,7 +28,7 @@
 
 pkgname=ros2-humble-arch
 pkgver=2026.02.20
-pkgrel=4
+pkgrel=5
 _eigen_ver=3.4.0
 _boost_ver=1.86.0
 _boost_dir=boost_${_boost_ver//./_}
@@ -57,6 +58,7 @@ depends=(
     'python-typeguard' # generate_parameter_library
     'python-yaml'
     'qhull'
+    'sdl2'             # joy (game controllers); provided by Arch's sdl2-compat
     'tl-expected'
 )
 optdepends=(
@@ -75,7 +77,7 @@ source=(
 )
 sha256sums=('69c4e09effda8125d1a4ce3edaafc3a40b00fb7a2245bc0586d30c81aa701d5f'
             '8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72'
-            'cc10ef6d96324efa8fea6469d128f291b3df7b65a1f3966474f54ef03038e5e6'
+            '6de645984273de591ff97a98e4a3bee8c66be281817034ddec594a499741ef43'
             '1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b')
 # Only a small part of Boost is used (below), so the archive isn't unpacked whole.
 noextract=("${_boost_dir}.tar.bz2")
@@ -116,6 +118,9 @@ _boost_subset=(
 #    also the ones that do not build on current Arch (PATCHES.md #12)
 #  - packages in these repositories that Humble never released (examples and
 #    unfinished work), so Ubuntu users never had them either
+#  - the parts of joystick_drivers and diagnostics that teleop doesn't use:
+#    spacenav and wiimote need libspnav and cwiid; joy_linux needs only
+#    diagnostic_updater
 _ignore=(
     qt_gui_cpp rqt_gui_cpp rosidl_typesupport_introspection_tests
     moveit moveit_ros moveit_runtime moveit_plugins
@@ -125,6 +130,9 @@ _ignore=(
     moveit_planners_trajopt moveit_setup_simulation joint_limits_interface
     generate_parameter_library_example generate_parameter_library_example_external
     generate_parameter_module_example cmake_generate_parameter_module_example
+    spacenav wiimote wiimote_msgs
+    diagnostics diagnostic_aggregator diagnostic_common_diagnostics
+    diagnostic_remote_logging self_test
 )
 
 prepare() {
